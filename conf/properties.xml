@@ -1,0 +1,10 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<!-- PROD -->
+<properties>
+	<comment>Properties for OpenNLP POStagger</comment>
+	<entry key="languages">da,en</entry>
+	<entry key="da">ddt-universal.pos</entry>
+	<entry key="en">en-pos-maxent.bin</entry>
+</properties>
+
+
