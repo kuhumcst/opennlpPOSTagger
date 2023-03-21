@@ -1,53 +1,40 @@
 import java.io.*;
 import java.io.IOException;
 import java.io.PrintWriter;
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.Cookie;
+
+import java.nio.charset.StandardCharsets;
+
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
+
 import java.util.Iterator;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.Properties;
 
-import is2.data.Cluster;
-import is2.data.DataF;
-import is2.data.DataFES;
-import is2.data.F2SF;
-import is2.data.FV;
-import is2.data.Instances;
-import is2.data.Long2Int;
-import is2.data.Long2IntInterface;
-import is2.data.Parse;
-import is2.data.PipeGen;
-import is2.data.SentenceData09;
-import is2.io.CONLLReader09;
-import is2.io.CONLLWriter09;
-import is2.tools.Retrainable;
-import is2.tools.Tool;
-import is2.util.DB;
-import is2.util.OptionsSuper;
-import is2.util.ParserEvaluator;
-
-import is2.parser.*;
-
-import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
-import org.apache.commons.httpclient.HttpClient;
+
+import org.apache.commons.io.IOUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import opennlp.tools.postag.POSModel;
 import opennlp.tools.postag.POSTaggerME;
-/*বাংলা this file is UTF-8 encoded*/
+/*This file is 𝕌𝕋𝔽-𝟠 encoded*/
 
+@SuppressWarnings("serial")
+@MultipartConfig(fileSizeThreshold=1024*1024*10,  // 10 MB 
+                 maxFileSize=-1/*1024*1024*50*/,       // 50 MB
+                 maxRequestSize=-1/*1024*1024*100*/)    // 100 MB
 
 public class opennlpPOSTagger extends HttpServlet 
     {    
@@ -60,6 +47,7 @@ public class opennlpPOSTagger extends HttpServlet
     
     public String readProperty(String property)
         {
+        logger.debug("readProperty [{}]",property);
         String ret = null;
         try
             {
@@ -88,6 +76,7 @@ public class opennlpPOSTagger extends HttpServlet
 
     public void init(ServletConfig config) throws ServletException 
         {
+        logger.debug("init");
         super.init(config);
         taggers = new ConcurrentHashMap<String, POSTaggerME>();
 
@@ -131,9 +120,9 @@ public class opennlpPOSTagger extends HttpServlet
             }    
         }
 
-
     public void tagSentence(String sent[],PrintWriter out,String language)
         {
+        logger.debug("tagSentence {}: {}",sent[0],language);
         if(sent.length > 0 && !(sent[0].equals("")))
             {
             POSTaggerME tagger;
@@ -147,6 +136,7 @@ public class opennlpPOSTagger extends HttpServlet
     public void POStag(String arg,PrintWriter out,String language)
     throws IOException
         {
+        logger.debug("POStag {},{}",arg,language);
         try {
             BufferedReader dis = new BufferedReader(new InputStreamReader(new FileInputStream(arg),"UTF8"));
             String str;
@@ -171,32 +161,30 @@ public class opennlpPOSTagger extends HttpServlet
     public void doGet(HttpServletRequest request, HttpServletResponse response)
     throws IOException, ServletException
         {
+        logger.debug("doGet");
         PrintWriter out = response.getWriter();
         out.println("GET not supported");
         }
 
-     public static String getParmFromMultipartFormData(HttpServletRequest request,List<FileItem> items,String parm)
+     public static String getParmFromMultipartFormData(HttpServletRequest request,Collection<Part> items,String parm)
         {
-        logger.debug("parm:["+parm+"]");
+        logger.debug("getParmFromMultipartFormData:["+parm+"]");
         String ret = "";
         try 
             {
             logger.debug("items:"+items);
-            Iterator<FileItem> itr = items.iterator();
+            Iterator<Part> itr = items.iterator();
             logger.debug("itr:"+itr);
             while(itr.hasNext()) 
                 {
                 logger.debug("in loop");
-                FileItem item = (FileItem) itr.next();
-                if(item.isFormField()) 
+                Part item = itr.next();
+                logger.debug("Field Name = "+item.getName()+", String = "+IOUtils.toString(item.getInputStream(),StandardCharsets.UTF_8));
+                if(item.getName().equals(parm))
                     {
-                    logger.debug("Field Name = "+item.getFieldName()+", String = "+item.getString());
-                    if(item.getFieldName().equals(parm))
-                        {
-                        ret = item.getString();
-                        logger.debug("Found " + parm + " = " + ret);
-                        break; // currently not interested in other fields than parm
-                        }
+                    ret = IOUtils.toString(item.getInputStream(),StandardCharsets.UTF_8);
+                    logger.debug("Found " + parm + " = " + ret);
+                    break; // currently not interested in other fields than parm
                     }
                 }
             }
@@ -206,91 +194,67 @@ public class opennlpPOSTagger extends HttpServlet
             }
         logger.debug("value["+parm+"]="+ret);
         return ret;
-        }             
-                   
+        }
 
- 
+    @Override
     public void doPost(HttpServletRequest request, HttpServletResponse response)
-        throws ServletException, IOException 
+//        throws ServletException, IOException 
         {
-        List items = getParmList(request);
-        String language = getParmFromMultipartFormData(request,items,"lang");
-        PrintWriter out = response.getWriter();
-        response.setContentType("text/plain;charset=UTF-8");
-        response.setCharacterEncoding("UTF-8");
-        response.setStatus(200);
-        logger.debug("doPost, RemoteAddr == {}",request.getRemoteAddr());
+        logger.debug("doPost");
+        Collection<Part> items = null;
+        try 
+            {
+            logger.debug("getParts");
+            items = request.getParts(); // throws ServletException if this request is not of type multipart/form-data
+            logger.debug("gotParts");
 
-        java.lang.String arg  = getParmsAndFiles(items,response,out);
-        POStag(arg,out,language);
-        /*File toDelete = new File(arg);
-        toDelete.delete();*/
+            logger.debug("doPost got items");
+
+            String language = getParmFromMultipartFormData(request,items,"lang");
+            PrintWriter out = response.getWriter();
+            response.setContentType("text/plain;charset=UTF-8");
+            response.setCharacterEncoding("UTF-8");
+            response.setStatus(200);
+            logger.debug("doPost, RemoteAddr == {}",request.getRemoteAddr());
+
+            String arg  = getParmsAndFiles(items,response,out);
+
+            logger.debug("Call POStag({},{})",arg,language);
+
+            POStag(arg,out,language);
+            /*File toDelete = new File(arg);
+            toDelete.delete();*/
+            }
+        catch(IOException ex) 
+            {
+            logger.error("Error encountered while parsing the request: "+ex.getMessage());
+            return;
+            }
+        catch(ServletException ex) 
+            {
+            logger.error("Error encountered while parsing the request: "+ex.getMessage());
+            return;
+            }
         }
 
-    public static List getParmList(HttpServletRequest request) throws ServletException
-        {
-        List<FileItem> items = null;
-        
-        Enumeration<String> parmNames = (Enumeration<String>)request.getParameterNames();
-        for (Enumeration<String> e = parmNames ; e.hasMoreElements() ;) 
-            {
-            String parmName = e.nextElement();
-            logger.debug("parmName: " + parmName);            
-            String vals[] = request.getParameterValues(parmName);
-            for(int j = 0;j < vals.length;++j)
-                {
-                logger.debug("value: " + vals[j]);            
-                }
-            }
-        
-        boolean is_multipart_formData = ServletFileUpload.isMultipartContent(request);
+    public java.lang.String getParmsAndFiles(Collection<Part> items,HttpServletResponse response,PrintWriter out) throws ServletException
+        {       
+        logger.debug("getParmsAndFiles");
 
-        if(is_multipart_formData)
-            {
-            DiskFileItemFactory  fileItemFactory = new DiskFileItemFactory ();
-            // Set the size threshold, above which content will be stored on disk.
-            fileItemFactory.setSizeThreshold(1*1024*1024); //1 MB
-            // Set the temporary directory to store the uploaded files of size above threshold.
-            File tmpDir = new File(TMP_DIR_PATH);
-            if(!tmpDir.isDirectory()) 
-                {
-                throw new ServletException("Trying to set \"" + TMP_DIR_PATH + "\" as temporary directory, but this is not a valid directory.");
-                }
-            fileItemFactory.setRepository(tmpDir);
-
-            
-            ServletFileUpload uploadHandler = new ServletFileUpload(fileItemFactory);
-            try {
-                items = uploadHandler.parseRequest(request);
-                }
-            catch(FileUploadException ex) 
-                {
-                logger.error("Error encountered while parsing the request: "+ex.getMessage());
-                }
-            }
-        return items;
-        }
-
-    public java.lang.String getParmsAndFiles(List items,HttpServletResponse response,PrintWriter out) throws ServletException
-        {        
         java.lang.String arg = "";
 
         try {
             // Parse the request
-            Iterator itr = items.iterator();
+            Iterator<Part> itr = items.iterator();
             while(itr.hasNext()) 
                 {
                 logger.debug("in loop");
-                FileItem item = (FileItem) itr.next();
+                Part item = itr.next();
                 // Handle Form Fields.
-                if(item.isFormField()) 
-                    {
-                    logger.debug("form field:"+item.getName());                    
-                    }
-                else if(item.getName() != "")
+                if(item.getSubmittedFileName() != null)
                     {
                     //Handle Uploaded files.
-                    String LocalFileName = item.getName();
+                    String LocalFileName = item.getSubmittedFileName();
                     logger.debug("LocalFileName:"+LocalFileName);
                     // Write file to the ultimate location.
 
@@ -303,7 +267,7 @@ public class opennlpPOSTagger extends HttpServlet
                     File file = File.createTempFile(LocalFileName,null,tmpDir);
                     String filename = file.getAbsolutePath();
                     logger.debug("LocalFileName:"+filename);
-                    item.write(file);
+                    item.write(filename);
                     arg = filename;
                     }
                 }
