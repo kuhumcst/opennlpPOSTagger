@@ -163,7 +163,7 @@ public class opennlpPOSTagger extends HttpServlet
         {
         logger.debug("doGet");
         PrintWriter out = response.getWriter();
-        out.println("GET not supported");
+        out.println("GET not supported by opennlpPOSTagger");
         }
 
      public static String getParmFromMultipartFormData(HttpServletRequest request,Collection<Part> items,String parm)
