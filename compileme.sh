@@ -1,4 +1,3 @@
-#!/usr/bin/bash
 if [ -d /opt/tomcat10/latest/lib ]; then
     CATALINA_BASE=/opt/tomcat10/latest
     CATALINA_HOME=/opt/tomcat10/latest
